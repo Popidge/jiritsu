@@ -1,5 +1,7 @@
 # Jiritsu
 
+![Jiritsu: Autonomous agentic glue for Omarchy](assets/jiritsu-banner.png)
+
 > Agentic glue for an agent-first Omarchy system.
 
 Jiritsu is an experimental set of small Linux tools for people and autonomous agents. The project adds structured state, intent, recovery, and controlled authority.
