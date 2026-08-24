@@ -1,0 +1,61 @@
+schema_version = "1.0"
+id = "omarchy-desktop"
+title = "Omarchy desktop"
+description = "The local Omarchy desktop session and its main interactive services work."
+
+[[capabilities]]
+id = "omarchy-base"
+title = "Omarchy base"
+description = "The supported Omarchy command is installed and responds."
+importance = "critical"
+
+[[capabilities.checks]]
+id = "omarchy-version"
+type = "command"
+description = "Read the installed Omarchy version through its supported command."
+command = ["omarchy", "version"]
+expected_exit = 0
+stdout = "nonempty"
+timeout_seconds = 5
+
+[[capabilities]]
+id = "graphical-session"
+title = "Graphical session"
+description = "The Hyprland session accepts local control requests and reports a monitor."
+importance = "critical"
+
+[[capabilities.checks]]
+id = "hyprland-monitors"
+type = "command"
+description = "Ask Hyprland for the current monitor data."
+command = ["hyprctl", "-j", "monitors"]
+expected_exit = 0
+stdout = "nonempty"
+timeout_seconds = 5
+
+[[capabilities]]
+id = "desktop-audio"
+title = "Desktop audio"
+description = "The PipeWire control interface responds for the current user."
+importance = "useful"
+
+[[capabilities.checks]]
+id = "pipewire-status"
+type = "command"
+description = "Read the current PipeWire graph."
+command = ["wpctl", "status"]
+expected_exit = 0
+stdout = "nonempty"
+timeout_seconds = 5
+
+[[capabilities]]
+id = "desktop-notifications"
+title = "Desktop notifications"
+description = "The desktop notification client is available."
+importance = "useful"
+
+[[capabilities.checks]]
+id = "notification-client"
+type = "command_available"
+description = "Find the standard desktop notification client."
+command = "notify-send"

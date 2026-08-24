@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jiritsu-workload"
+version = "0.1.0"
+description = "Local workload contracts for an Omarchy machine"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+
+[project.scripts]
+jiritsu-workload = "jiritsu_workload.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+jiritsu_workload = ["defaults/*.toml"]

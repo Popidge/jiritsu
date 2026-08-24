@@ -1,0 +1,64 @@
+schema_version = "1.0"
+id = "agent-development"
+title = "Agent development"
+description = "The machine has the core tools for local agent-assisted software development."
+
+[[capabilities]]
+id = "agent-runtime"
+title = "Agent runtime"
+description = "The Codex command is installed and responds."
+importance = "critical"
+
+[[capabilities.checks]]
+id = "codex-version"
+type = "command"
+description = "Read the installed Codex command version."
+command = ["codex", "--version"]
+expected_exit = 0
+stdout = "nonempty"
+timeout_seconds = 5
+
+[[capabilities]]
+id = "version-control"
+title = "Version control"
+description = "Git is installed and responds."
+importance = "critical"
+
+[[capabilities.checks]]
+id = "git-version"
+type = "command"
+description = "Read the installed Git version."
+command = ["git", "--version"]
+expected_exit = 0
+stdout = "nonempty"
+timeout_seconds = 5
+
+[[capabilities]]
+id = "source-search"
+title = "Source search"
+description = "Ripgrep is available for fast source and file searches."
+importance = "useful"
+
+[[capabilities.checks]]
+id = "ripgrep-version"
+type = "command"
+description = "Read the installed ripgrep version."
+command = ["rg", "--version"]
+expected_exit = 0
+stdout = "nonempty"
+timeout_seconds = 5
+
+[[capabilities]]
+id = "python-runtime"
+title = "Python runtime"
+description = "Python 3 is available for local tools and automation."
+importance = "useful"
+
+[[capabilities.checks]]
+id = "python-version"
+type = "command"
+description = "Read the installed Python 3 version."
+command = ["python3", "--version"]
+expected_exit = 0
+stdout = "nonempty"
+timeout_seconds = 5

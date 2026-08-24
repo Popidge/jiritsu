@@ -1,0 +1,80 @@
+{
+  "schema_version": "1.0",
+  "sources": {
+    "system.hostname": {
+      "kind": "file",
+      "content": "test-machine\n",
+      "observed_at": "2026-08-24T12:00:00Z"
+    },
+    "system.os_release": {
+      "kind": "file",
+      "content": "NAME=\"Omarchy\"\nID=omarchy\nPRETTY_NAME=\"Omarchy Test\"\nVERSION_ID=\"4.0.0\"\n",
+      "observed_at": "2026-08-24T12:00:00Z"
+    },
+    "system.uname": {
+      "kind": "command",
+      "stdout": "Linux 7.1.8-test x86_64\n",
+      "exit_code": 0,
+      "observed_at": "2026-08-24T12:00:01Z"
+    },
+    "omarchy.version": {
+      "kind": "command",
+      "stdout": "4.0.0-test\n",
+      "exit_code": 0,
+      "observed_at": "2026-08-24T12:00:01Z"
+    },
+    "packages.pacman_query": {
+      "kind": "command",
+      "stdout": "linux 7.1.8-1\nomarchy 4.0.0-1\npython 3.14.0-1\n",
+      "exit_code": 0,
+      "observed_at": "2026-08-24T12:00:02Z"
+    },
+    "services.system_state": {
+      "kind": "command",
+      "stdout": "running\n",
+      "exit_code": 0,
+      "observed_at": "2026-08-24T12:00:02Z"
+    },
+    "services.running": {
+      "kind": "command",
+      "stdout": "NetworkManager.service loaded active running Network Manager\nsshd.service loaded active running OpenSSH server\n",
+      "exit_code": 0,
+      "observed_at": "2026-08-24T12:00:02Z"
+    },
+    "hardware.lscpu": {
+      "kind": "command",
+      "stdout": "{\"lscpu\":[{\"field\":\"Architecture:\",\"data\":\"x86_64\"},{\"field\":\"CPU(s):\",\"data\":\"8\"},{\"field\":\"Vendor ID:\",\"data\":\"AuthenticAMD\"},{\"field\":\"Model name:\",\"data\":\"Fixture CPU\"},{\"field\":\"Thread(s) per core:\",\"data\":\"2\"},{\"field\":\"Core(s) per socket:\",\"data\":\"4\"},{\"field\":\"Socket(s):\",\"data\":\"1\"},{\"field\":\"Virtualization:\",\"data\":\"AMD-V\"}]}\n",
+      "exit_code": 0,
+      "observed_at": "2026-08-24T12:00:03Z"
+    },
+    "hardware.meminfo": {
+      "kind": "file",
+      "content": "MemTotal:       16384000 kB\nMemFree:         2048000 kB\nMemAvailable:    8192000 kB\n",
+      "observed_at": "2026-08-24T12:00:03Z"
+    },
+    "omarchy.network_status": {
+      "kind": "command",
+      "stdout": "iface\twlan0\nip\t192.0.2.10\nprefix\t24\ngateway\t192.0.2.1\nrx_bytes\t1200\ntx_bytes\t3400\ntype\twifi\nssid\tFixture WiFi\nsignal_dbm\t-41\nfreq\t5180.0\nbitrate\t866.7 MBit/s\nrouter_ping_ms\t1.25\ninternet_ping_ms\t9.5\n",
+      "exit_code": 0,
+      "observed_at": "2026-08-24T12:00:04Z"
+    },
+    "networks.ip_address": {
+      "kind": "command",
+      "stdout": "[{\"ifindex\":1,\"ifname\":\"lo\",\"mtu\":65536,\"operstate\":\"UNKNOWN\",\"link_type\":\"loopback\",\"addr_info\":[{\"family\":\"inet\",\"local\":\"127.0.0.1\",\"prefixlen\":8,\"scope\":\"host\"}]},{\"ifindex\":2,\"ifname\":\"wlan0\",\"mtu\":1500,\"operstate\":\"UP\",\"link_type\":\"ether\",\"addr_info\":[{\"family\":\"inet\",\"local\":\"192.0.2.10\",\"prefixlen\":24,\"scope\":\"global\"}]}]\n",
+      "exit_code": 0,
+      "observed_at": "2026-08-24T12:00:04Z"
+    },
+    "snapshots.snapper_configs": {
+      "kind": "command",
+      "stdout": "{\"configs\":[{\"config\":\"root\",\"subvolume\":\"/\"}]}\n",
+      "exit_code": 0,
+      "observed_at": "2026-08-24T12:00:05Z"
+    },
+    "snapshots.active_root": {
+      "kind": "command",
+      "stdout": "{\"filesystems\":[{\"source\":\"/dev/mapper/root[/@/.snapshots/42/snapshot]\",\"fstype\":\"btrfs\",\"options\":\"rw,relatime,subvol=/@/.snapshots/42/snapshot\"}]}\n",
+      "exit_code": 0,
+      "observed_at": "2026-08-24T12:00:05Z"
+    }
+  }
+}
