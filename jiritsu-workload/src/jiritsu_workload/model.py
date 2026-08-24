@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 
 SCHEMA_VERSION = "1.0"
-RESULT_SCHEMA_VERSION = "1.0"
+RESULT_SCHEMA_VERSION = "1.1"
 
 
 class ContractError(Exception):
@@ -36,7 +36,12 @@ class ContractError(Exception):
 class Check:
     check_id: str
     check_type: Literal[
-        "command", "command_available", "environment", "path", "systemd_unit"
+        "command",
+        "command_available",
+        "environment",
+        "path",
+        "stated_fact",
+        "systemd_unit",
     ]
     description: str
     parameters: dict[str, Any]

@@ -12,12 +12,30 @@ from .model import Capability, Check, ContractError, SCHEMA_VERSION, WorkloadCon
 
 
 ID_PATTERN = re.compile(r"^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$")
-CHECK_TYPES = {"command", "command_available", "environment", "path", "systemd_unit"}
+FACT_PATH_PATTERN = re.compile(r"^[A-Za-z0-9_-]+(?:\.(?:[A-Za-z0-9_-]+|\*))*$")
+DIRECT_CHECK_TYPES = {
+    "command",
+    "command_available",
+    "environment",
+    "path",
+    "systemd_unit",
+}
+CHECK_TYPES = DIRECT_CHECK_TYPES | {"stated_fact"}
 IMPORTANCE_VALUES = {"critical", "useful"}
 PATH_KIND_VALUES = {"any", "file", "directory", "executable"}
 SYSTEMD_SCOPE_VALUES = {"system", "user"}
 SYSTEMD_STATE_VALUES = {"active", "enabled", "failed", "inactive"}
 STDOUT_MATCH_VALUES = {"any", "nonempty", "empty"}
+FACT_OPERATORS = {
+    "at_least",
+    "at_most",
+    "contains",
+    "equals",
+    "exists",
+    "nonempty",
+    "not_equals",
+}
+FACT_OPERATORS_WITH_EXPECTED = FACT_OPERATORS - {"exists", "nonempty"}
 
 
 def user_config_dir(environment: dict[str, str] | None = None) -> Path:
@@ -77,12 +95,88 @@ def _positive_number(payload: dict[str, Any], field: str, path: str) -> float | 
     return float(value)
 
 
-def _check_parameters(payload: dict[str, Any], check_type: str, path: str) -> dict[str, Any]:
+def _check_parameters(
+    payload: dict[str, Any], check_type: str, path: str
+) -> dict[str, Any]:
     common = {"id", "type", "description"}
     result: dict[str, Any]
     allowed: set[str]
 
-    if check_type == "command_available":
+    if check_type == "stated_fact":
+        fact = _require_id(payload, "fact", path)
+        operator = payload.get("operator", "exists")
+        if operator not in FACT_OPERATORS:
+            raise ContractError(
+                "contract_invalid",
+                f"operator must be one of {sorted(FACT_OPERATORS)}",
+                path=path,
+                field="operator",
+            )
+        result = {"fact": fact, "operator": operator}
+        if "path" in payload:
+            fact_path = _require_string(payload, "path", path)
+            if not FACT_PATH_PATTERN.fullmatch(fact_path):
+                raise ContractError(
+                    "contract_invalid",
+                    "path must contain field names separated by dots and optional * segments",
+                    path=path,
+                    field="path",
+                )
+            result["path"] = fact_path
+        if operator in FACT_OPERATORS_WITH_EXPECTED:
+            if "expected" not in payload:
+                raise ContractError(
+                    "contract_invalid",
+                    f"expected is required for the {operator} operator",
+                    path=path,
+                    field="expected",
+                )
+            expected = payload["expected"]
+            if not isinstance(expected, (str, int, float, bool)):
+                raise ContractError(
+                    "contract_invalid",
+                    "expected must be a string, number, or boolean",
+                    path=path,
+                    field="expected",
+                )
+            if operator in {"at_least", "at_most"} and (
+                isinstance(expected, bool) or not isinstance(expected, (int, float))
+            ):
+                raise ContractError(
+                    "contract_invalid",
+                    f"expected must be a number for the {operator} operator",
+                    path=path,
+                    field="expected",
+                )
+            result["expected"] = expected
+        elif "expected" in payload:
+            raise ContractError(
+                "contract_invalid",
+                f"expected is not valid for the {operator} operator",
+                path=path,
+                field="expected",
+            )
+        if "fallback" in payload:
+            fallback = payload["fallback"]
+            if not isinstance(fallback, dict):
+                raise ContractError(
+                    "contract_invalid",
+                    "fallback must be a table",
+                    path=path,
+                    field="fallback",
+                )
+            fallback_type = fallback.get("type")
+            if fallback_type not in DIRECT_CHECK_TYPES:
+                raise ContractError(
+                    "contract_invalid",
+                    f"fallback type must be one of {sorted(DIRECT_CHECK_TYPES)}",
+                    path=path,
+                    field="fallback.type",
+                )
+            fallback_parameters = _check_parameters(fallback, fallback_type, path)
+            result["fallback"] = {"type": fallback_type, **fallback_parameters}
+        allowed = common | {"fact", "path", "operator", "expected", "fallback"}
+    elif check_type == "command_available":
         command = _require_string(payload, "command", path)
         result = {"command": command}
         allowed = common | {"command"}
@@ -92,7 +186,10 @@ def _check_parameters(payload: dict[str, Any], check_type: str, path: str) -> di
         if "equals" in payload:
             if not isinstance(payload["equals"], str):
                 raise ContractError(
-                    "contract_invalid", "equals must be a string", path=path, field="equals"
+                    "contract_invalid",
+                    "equals must be a string",
+                    path=path,
+                    field="equals",
                 )
             result["equals"] = payload["equals"]
         if "nonempty" in payload:
@@ -130,12 +227,14 @@ def _check_parameters(payload: dict[str, Any], check_type: str, path: str) -> di
             )
         result = {"unit": unit, "scope": scope, "state": state}
         allowed = common | {"unit", "scope", "state"}
-    else:
+    elif check_type == "command":
         command = payload.get("command")
         if (
             not isinstance(command, list)
             or not command
-            or any(not isinstance(argument, str) or not argument for argument in command)
+            or any(
+                not isinstance(argument, str) or not argument for argument in command
+            )
         ):
             raise ContractError(
                 "contract_invalid",
@@ -168,6 +267,13 @@ def _check_parameters(payload: dict[str, Any], check_type: str, path: str) -> di
         if timeout is not None:
             result["timeout_seconds"] = timeout
         allowed = common | {"command", "expected_exit", "stdout", "timeout_seconds"}
+    else:
+        raise ContractError(
+            "contract_invalid",
+            f"unsupported check type: {check_type}",
+            path=path,
+            field="type",
+        )
 
     unknown = sorted(set(payload) - allowed)
     if unknown:
@@ -184,7 +290,9 @@ def parse_contract(
     payload: Any, *, source: str, source_kind: str = "explicit"
 ) -> WorkloadContract:
     if not isinstance(payload, dict):
-        raise ContractError("contract_invalid", "contract root must be a table", path=source)
+        raise ContractError(
+            "contract_invalid", "contract root must be a table", path=source
+        )
     if payload.get("schema_version") != SCHEMA_VERSION:
         raise ContractError(
             "contract_invalid",
@@ -203,7 +311,9 @@ def parse_contract(
             path=source,
             field="capabilities",
         )
-    unknown_root = sorted(set(payload) - {"schema_version", "id", "title", "description", "capabilities"})
+    unknown_root = sorted(
+        set(payload) - {"schema_version", "id", "title", "description", "capabilities"}
+    )
     if unknown_root:
         raise ContractError(
             "contract_invalid",
@@ -218,7 +328,10 @@ def parse_contract(
         field_path = f"capabilities[{index}]"
         if not isinstance(raw_capability, dict):
             raise ContractError(
-                "contract_invalid", "capability must be a table", path=source, field=field_path
+                "contract_invalid",
+                "capability must be a table",
+                path=source,
+                field=field_path,
             )
         capability_id = _require_id(raw_capability, "id", source)
         if capability_id in capability_ids:
@@ -262,7 +375,10 @@ def parse_contract(
             check_path = f"{field_path}.checks[{check_index}]"
             if not isinstance(raw_check, dict):
                 raise ContractError(
-                    "contract_invalid", "check must be a table", path=source, field=check_path
+                    "contract_invalid",
+                    "check must be a table",
+                    path=source,
+                    field=check_path,
                 )
             check_id = _require_id(raw_check, "id", source)
             if check_id in check_ids:
@@ -308,25 +424,39 @@ def parse_contract(
     )
 
 
-def load_contract(path: str | Path, *, source_kind: str = "explicit") -> WorkloadContract:
+def load_contract(
+    path: str | Path, *, source_kind: str = "explicit"
+) -> WorkloadContract:
     contract_path = Path(path)
     try:
         with contract_path.open("rb") as contract_file:
             payload = tomllib.load(contract_file)
     except FileNotFoundError as error:
-        raise ContractError("contract_not_found", "contract file does not exist", path=str(path)) from error
+        raise ContractError(
+            "contract_not_found", "contract file does not exist", path=str(path)
+        ) from error
     except PermissionError as error:
-        raise ContractError("contract_denied", "cannot read contract file", path=str(path)) from error
+        raise ContractError(
+            "contract_denied", "cannot read contract file", path=str(path)
+        ) from error
     except tomllib.TOMLDecodeError as error:
-        raise ContractError("contract_invalid", f"invalid TOML: {error}", path=str(path)) from error
+        raise ContractError(
+            "contract_invalid", f"invalid TOML: {error}", path=str(path)
+        ) from error
     except OSError as error:
-        raise ContractError("contract_unreadable", f"cannot read contract file: {error}", path=str(path)) from error
+        raise ContractError(
+            "contract_unreadable", f"cannot read contract file: {error}", path=str(path)
+        ) from error
     return parse_contract(payload, source=str(contract_path), source_kind=source_kind)
 
 
 def default_contract_paths() -> list[Path]:
     directory = resources.files("jiritsu_workload").joinpath("defaults")
-    return sorted(Path(str(entry)) for entry in directory.iterdir() if entry.name.endswith(".toml"))
+    return sorted(
+        Path(str(entry))
+        for entry in directory.iterdir()
+        if entry.name.endswith(".toml")
+    )
 
 
 def discover_contracts(config_dir: Path | None = None) -> list[WorkloadContract]:
@@ -338,7 +468,9 @@ def discover_contracts(config_dir: Path | None = None) -> list[WorkloadContract]
     if directory.exists():
         if not directory.is_dir():
             raise ContractError(
-                "config_invalid", "the config path is not a directory", path=str(directory)
+                "config_invalid",
+                "the config path is not a directory",
+                path=str(directory),
             )
         user_sources: dict[str, str] = {}
         for path in sorted(directory.glob("*.toml")):
@@ -370,14 +502,18 @@ def select_contracts(
     return [available[contract_id] for contract_id in dict.fromkeys(selected_ids)]
 
 
-def install_contract(source_path: Path, destination_dir: Path) -> tuple[str, WorkloadContract, Path]:
+def install_contract(
+    source_path: Path, destination_dir: Path
+) -> tuple[str, WorkloadContract, Path]:
     contract = load_contract(source_path, source_kind="explicit")
     destination_dir.mkdir(parents=True, exist_ok=True)
     destination = destination_dir / f"{contract.contract_id}.toml"
     action = "updated" if destination.exists() else "created"
     try:
         content = source_path.read_bytes()
-        with tempfile.NamedTemporaryFile(dir=destination_dir, delete=False) as temporary:
+        with tempfile.NamedTemporaryFile(
+            dir=destination_dir, delete=False
+        ) as temporary:
             temporary.write(content)
             temporary.flush()
             os.fsync(temporary.fileno())
@@ -388,7 +524,9 @@ def install_contract(source_path: Path, destination_dir: Path) -> tuple[str, Wor
         if "temporary_path" in locals():
             temporary_path.unlink(missing_ok=True)
         raise ContractError(
-            "contract_write_failed", f"cannot write contract: {error}", path=str(destination)
+            "contract_write_failed",
+            f"cannot write contract: {error}",
+            path=str(destination),
         ) from error
     installed = load_contract(destination, source_kind="user")
     return action, installed, destination

@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+installer_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+module_dir=$(cd -- "$installer_dir/.." && pwd)
+skills_dir="$module_dir/skills"
+target_dir="${CODEX_HOME:-${HOME}/.codex}/skills"
+dry_run=false
+
+usage() {
+  printf '%s\n' "usage: jiritsu-skills-install [--dry-run] [--target PATH]"
+}
+
+while (($# > 0)); do
+  case "$1" in
+    --dry-run)
+      dry_run=true
+      shift
+      ;;
+    --target)
+      if (($# < 2)); then
+        printf '%s\n' "error: --target requires a path" >&2
+        exit 64
+      fi
+      target_dir=$2
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      printf 'error: unknown argument: %s\n' "$1" >&2
+      usage >&2
+      exit 64
+      ;;
+  esac
+done
+
+if [[ -z "$target_dir" || "$target_dir" == "/" ]]; then
+  printf '%s\n' "error: the target skill directory is not safe" >&2
+  exit 64
+fi
+
+if [[ -e "$target_dir" && ! -d "$target_dir" ]]; then
+  printf 'error: the target is not a directory: %s\n' "$target_dir" >&2
+  exit 1
+fi
+
+conflict=false
+for skill_file in "$skills_dir"/*/SKILL.md; do
+  skill_path=$(dirname -- "$skill_file")
+  skill_name=$(basename -- "$skill_path")
+  destination="$target_dir/$skill_name"
+
+  if [[ -e "$destination" || -L "$destination" ]]; then
+    linked_path=""
+    if [[ -L "$destination" ]]; then
+      linked_path=$(readlink -f -- "$destination" 2>/dev/null || true)
+    fi
+    if [[ "$linked_path" != "$skill_path" ]]; then
+      printf 'error: target already exists: %s\n' "$destination" >&2
+      conflict=true
+    fi
+  fi
+done
+
+if [[ "$conflict" == true ]]; then
+  exit 1
+fi
+
+if [[ "$dry_run" == true ]]; then
+  if [[ -d "$target_dir" ]]; then
+    printf 'plan: use skill directory: %s\n' "$target_dir"
+  else
+    printf 'plan: create skill directory: %s\n' "$target_dir"
+  fi
+else
+  mkdir -p -- "$target_dir"
+fi
+
+for skill_file in "$skills_dir"/*/SKILL.md; do
+  skill_path=$(dirname -- "$skill_file")
+  skill_name=$(basename -- "$skill_path")
+  destination="$target_dir/$skill_name"
+
+  if [[ -L "$destination" ]]; then
+    printf 'present: %s -> %s\n' "$destination" "$skill_path"
+  elif [[ "$dry_run" == true ]]; then
+    printf 'plan: link %s -> %s\n' "$destination" "$skill_path"
+  else
+    ln -s -- "$skill_path" "$destination"
+    printf 'installed: %s -> %s\n' "$destination" "$skill_path"
+  fi
+done

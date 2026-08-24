@@ -11,12 +11,11 @@ importance = "critical"
 
 [[capabilities.checks]]
 id = "omarchy-version"
-type = "command"
-description = "Read the installed Omarchy version through its supported command."
-command = ["omarchy", "version"]
-expected_exit = 0
-stdout = "nonempty"
-timeout_seconds = 5
+type = "stated_fact"
+description = "Read the installed Omarchy version from machine state."
+fact = "system.omarchy.version"
+operator = "nonempty"
+fallback = { type = "command", command = ["omarchy", "version"], expected_exit = 0, stdout = "nonempty", timeout_seconds = 5 }
 
 [[capabilities]]
 id = "graphical-session"
@@ -51,11 +50,15 @@ timeout_seconds = 5
 [[capabilities]]
 id = "desktop-notifications"
 title = "Desktop notifications"
-description = "The desktop notification client is available."
+description = "The native package for the desktop notification client is installed."
 importance = "useful"
 
 [[capabilities.checks]]
 id = "notification-client"
-type = "command_available"
-description = "Find the standard desktop notification client."
-command = "notify-send"
+type = "stated_fact"
+description = "Find the package for the standard desktop notification client."
+fact = "packages.installed"
+path = "packages.*.name"
+operator = "contains"
+expected = "libnotify"
+fallback = { type = "command_available", command = "notify-send" }

@@ -57,7 +57,9 @@ def _parser() -> argparse.ArgumentParser:
             help="use this user contract directory instead of the standard location",
         )
 
-    list_command = subparsers.add_parser("list", help="list available workload contracts")
+    list_command = subparsers.add_parser(
+        "list", help="list available workload contracts"
+    )
     add_common_options(list_command)
 
     query = subparsers.add_parser("query", help="return complete workload contracts")
@@ -69,6 +71,17 @@ def _parser() -> argparse.ArgumentParser:
     assess.add_argument("selectors", nargs="*", help="workload IDs; omit for all")
     assess.add_argument(
         "--timeout", type=float, default=5.0, help="default command timeout in seconds"
+    )
+    assess.add_argument(
+        "--state-source",
+        choices=("auto", "direct"),
+        default="auto",
+        help="use stated when available or force direct probes",
+    )
+    assess.add_argument(
+        "--stated-command",
+        type=Path,
+        help="use this jiritsu-stated executable",
     )
 
     validate = subparsers.add_parser("validate", help="validate contract TOML files")
@@ -106,7 +119,9 @@ def _error(error: ContractError | UsageError) -> dict[str, Any]:
 
 
 def _config_directory(arguments: argparse.Namespace) -> Path:
-    return arguments.config_dir if arguments.config_dir is not None else user_config_dir()
+    return (
+        arguments.config_dir if arguments.config_dir is not None else user_config_dir()
+    )
 
 
 def _list(arguments: argparse.Namespace) -> dict[str, Any]:
@@ -182,7 +197,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             contracts = select_contracts(
                 discover_contracts(arguments.config_dir), arguments.selectors
             )
-            payload = assess_contracts(contracts, arguments.timeout)
+            payload = assess_contracts(
+                contracts,
+                arguments.timeout,
+                stated_command=(
+                    str(arguments.stated_command)
+                    if arguments.stated_command is not None
+                    else None
+                ),
+                use_stated=arguments.state_source == "auto",
+            )
             if payload["status"] == "unhealthy":
                 exit_status = EXIT_UNHEALTHY
             elif payload["status"] == "degraded":

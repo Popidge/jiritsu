@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+module_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+exec env PYTHONPATH="${module_root}/src${PYTHONPATH:+:${PYTHONPATH}}" python3 -m jiritsu_checkpoints "$@"

@@ -10,6 +10,27 @@ Jiritsu is experimental agentic glue for Omarchy. Build tangible ideas quickly, 
 - Optimise for learning and working software. It is acceptable to revise or discard an approach when the live experiment teaches us something better.
 - Describe goals, behaviour, inputs, outputs, side effects, and failure modes in plain English. The code and module documentation should be understandable without knowing the whole Jiritsu architecture.
 
+## Module State and Fallbacks
+
+Before you design or change a module, inspect the repository root, other module code, tests, and README files.
+
+Treat executable code and tests as the source of truth for implemented behaviour. Treat a manifesto or roadmap as intent, not an implemented capability.
+
+Do not copy a fixed module-status list into this file. Get the current status from the repository contents.
+
+Apply these integration rules:
+
+- Use the complete Jiritsu stack as the default happy path.
+- If a relevant module exists and its current contract supports the task, use its public interface.
+- Without sibling modules, keep each module functional through baseline providers.
+- If an optional Jiritsu integration is unavailable, fall back automatically to the supported Omarchy interface.
+- If Omarchy has a genuine gap, fall back to the standard Linux interface.
+- Do not make a missing optional module a startup error.
+- Do not block the core standalone behaviour.
+- Keep public behaviour and data meaning stable across Jiritsu and baseline providers.
+- Report the selected provider, source, and fallback errors in structured output.
+- Add focused tests for the integrated path and the standalone fallback.
+
 ## Omarchy First
 
 This Omarchy installation is the development environment and the first test bed.

@@ -149,6 +149,6 @@ The tests cover complete fixture data, group selection, malformed data, missing 
 
 `jiritsu-stated` is the observation layer of Jiritsu. Other modules use these facts instead of model memory or machine assumptions.
 
-`jiritsu-workload` can assess important capabilities with these facts. `jiritsu-proposals` can record the state before a change.
+`jiritsu-workload` assesses important capabilities with these facts. `jiritsu-proposals` records the state before a change.
 
-`jiritsu-broker` can expose selected facts to agents. A person can use `jiritsu-stated` without the other modules.
+`jiritsu-broker` exposes selected facts to agents. A person can use `jiritsu-stated` without the other modules.

@@ -1,0 +1,10 @@
+#!/usr/bin/env python3
+from pathlib import Path
+import sys
+
+module_root = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(module_root / "src"))
+
+from jiritsu_proposals.cli import main
+
+raise SystemExit(main())

@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jiritsu-checkpoints"
+version = "0.1.0"
+description = "Identifiable recovery points for Jiritsu machine changes"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+
+[project.scripts]
+jiritsu-checkpoints = "jiritsu_checkpoints.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]

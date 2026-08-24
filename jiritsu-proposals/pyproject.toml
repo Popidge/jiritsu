@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jiritsu-proposals"
+version = "0.1.0"
+description = "Durable, approved machine-change proposals for Jiritsu"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+
+[project.scripts]
+jiritsu-proposals = "jiritsu_proposals.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]

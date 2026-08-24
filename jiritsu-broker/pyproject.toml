@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jiritsu-broker"
+version = "0.1.0"
+description = "Deterministic, audited agent boundary for Jiritsu operations"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+
+[project.scripts]
+jiritsu-broker = "jiritsu_broker.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+jiritsu_broker = ["defaults/*.toml"]

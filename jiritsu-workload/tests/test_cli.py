@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import textwrap
@@ -84,7 +85,10 @@ class CliTests(unittest.TestCase):
             {workload["id"] for workload in result["workloads"]},
         )
         self.assertTrue(
-            all(workload["source"]["kind"] == "default" for workload in result["workloads"])
+            all(
+                workload["source"]["kind"] == "default"
+                for workload in result["workloads"]
+            )
         )
 
     def test_query_returns_complete_contract(self) -> None:
@@ -94,7 +98,16 @@ class CliTests(unittest.TestCase):
         contract = result["workloads"][0]
         self.assertEqual("agent-development", contract["id"])
         self.assertEqual("1.0", contract["schema_version"])
-        self.assertEqual({"critical", "useful"}, {item["importance"] for item in contract["capabilities"]})
+        self.assertEqual(
+            {"critical", "useful"},
+            {item["importance"] for item in contract["capabilities"]},
+        )
+        check_types = {
+            check["type"]
+            for capability in contract["capabilities"]
+            for check in capability["checks"]
+        }
+        self.assertEqual({"command", "stated_fact"}, check_types)
 
     def test_common_options_work_after_the_subcommand(self) -> None:
         output = io.StringIO()
@@ -116,10 +129,219 @@ class CliTests(unittest.TestCase):
         self.assertEqual(EXIT_OK, status)
         self.assertEqual("healthy", result["status"])
         self.assertEqual("direct_probes", result["machine_state"]["source"])
-        self.assertEqual("not_used", result["machine_state"]["jiritsu_stated"])
+        self.assertEqual("not_required", result["machine_state"]["jiritsu_stated"])
         check = result["workloads"][0]["capabilities"][0]["checks"][0]
         self.assertEqual("pass", check["status"])
         self.assertEqual("ready", check["details"]["stdout"])
+
+    def test_stated_fact_is_the_preferred_source(self) -> None:
+        contract = self.write_contract(
+            "stated-pass",
+            check="""type = "stated_fact"
+fact = "packages.installed"
+path = "packages.*.name"
+operator = "contains"
+expected = "git"
+fallback = { type = "command_available", command = "missing-fallback-command" }""",
+        )
+        self.apply(contract)
+        payload = {
+            "schema_version": "1.0",
+            "status": "ok",
+            "facts": {
+                "packages.installed": {
+                    "value": {
+                        "count": 1,
+                        "packages": [{"name": "git", "version": "1"}],
+                    },
+                    "source": {
+                        "id": "packages",
+                        "kind": "command",
+                        "locator": "pacman -Q",
+                    },
+                    "observed_at": "2026-08-24T12:00:00Z",
+                    "age_seconds": 0.1,
+                    "fixture": False,
+                }
+            },
+            "errors": [],
+        }
+        completed = subprocess.CompletedProcess([], 0, json.dumps(payload), "")
+
+        with patch("jiritsu_workload.state._invoke", return_value=completed) as invoke:
+            status, result = self.invoke(
+                "assess", "stated-pass", "--stated-command", "/fake/jiritsu-stated"
+            )
+
+        self.assertEqual(EXIT_OK, status)
+        self.assertEqual("jiritsu-stated", result["machine_state"]["source"])
+        self.assertEqual("used", result["machine_state"]["jiritsu_stated"])
+        self.assertEqual(1, result["machine_state"]["stated_check_count"])
+        self.assertEqual(0, result["machine_state"]["fallback_check_count"])
+        check = result["workloads"][0]["capabilities"][0]["checks"][0]
+        self.assertEqual("pass", check["status"])
+        self.assertEqual("jiritsu-stated", check["source"])
+        self.assertEqual("git", check["details"]["expected"])
+        command = invoke.call_args.args[0]
+        self.assertEqual("/fake/jiritsu-stated", command[0])
+        self.assertEqual(1, command.count("packages.installed"))
+
+    def test_unavailable_stated_uses_the_direct_fallback(self) -> None:
+        contract = self.write_contract(
+            "stated-unavailable",
+            check="""type = "stated_fact"
+fact = "system.omarchy.version"
+operator = "nonempty"
+fallback = { type = "command_available", command = "python3" }""",
+        )
+        self.apply(contract)
+
+        status, result = self.invoke(
+            "assess",
+            "stated-unavailable",
+            "--stated-command",
+            "/path/that/does/not/exist/jiritsu-stated",
+        )
+
+        self.assertEqual(EXIT_OK, status)
+        self.assertEqual("unavailable", result["machine_state"]["jiritsu_stated"])
+        self.assertEqual("direct_probes", result["machine_state"]["source"])
+        self.assertEqual(1, result["machine_state"]["fallback_check_count"])
+        check = result["workloads"][0]["capabilities"][0]["checks"][0]
+        self.assertEqual("pass", check["status"])
+        self.assertEqual("direct_probe", check["source"])
+        self.assertEqual("unavailable", check["details"]["fallback"]["stated_status"])
+
+    def test_partial_stated_result_uses_fallback_only_for_the_missing_fact(
+        self,
+    ) -> None:
+        first = self.write_contract(
+            "partial-present",
+            check="""type = "stated_fact"
+fact = "system.omarchy.version"
+operator = "nonempty"
+fallback = { type = "command_available", command = "missing-fallback-command" }""",
+        )
+        second = self.write_contract(
+            "partial-missing",
+            check="""type = "stated_fact"
+fact = "packages.installed"
+path = "packages.*.name"
+operator = "contains"
+expected = "git"
+fallback = { type = "command_available", command = "git" }""",
+        )
+        self.apply(first)
+        self.apply(second)
+        payload = {
+            "schema_version": "1.0",
+            "status": "partial",
+            "facts": {
+                "system.omarchy.version": {
+                    "value": "4.0.0-test",
+                    "source": {"id": "omarchy.version"},
+                    "observed_at": "2026-08-24T12:00:00Z",
+                    "age_seconds": 0.1,
+                    "fixture": True,
+                }
+            },
+            "errors": [{"code": "source_failed", "fact_id": "packages.installed"}],
+        }
+        completed = subprocess.CompletedProcess([], 2, json.dumps(payload), "")
+
+        with patch("jiritsu_workload.state._invoke", return_value=completed):
+            status, result = self.invoke(
+                "assess",
+                "partial-present",
+                "partial-missing",
+                "--stated-command",
+                "/fake/jiritsu-stated",
+            )
+
+        self.assertEqual(EXIT_OK, status)
+        self.assertEqual("partial", result["machine_state"]["jiritsu_stated"])
+        self.assertEqual("hybrid", result["machine_state"]["source"])
+        self.assertEqual(1, result["machine_state"]["stated_check_count"])
+        self.assertEqual(1, result["machine_state"]["direct_probe_count"])
+        self.assertEqual(1, result["machine_state"]["fallback_check_count"])
+
+    def test_invalid_stated_response_uses_the_direct_fallback(self) -> None:
+        contract = self.write_contract(
+            "stated-invalid",
+            check="""type = "stated_fact"
+fact = "system.omarchy.version"
+operator = "nonempty"
+fallback = { type = "command_available", command = "python3" }""",
+        )
+        self.apply(contract)
+        completed = subprocess.CompletedProcess([], 0, "not-json", "bad output")
+
+        with patch("jiritsu_workload.state._invoke", return_value=completed):
+            status, result = self.invoke(
+                "assess", "stated-invalid", "--stated-command", "/fake/jiritsu-stated"
+            )
+
+        self.assertEqual(EXIT_OK, status)
+        self.assertEqual("failed", result["machine_state"]["jiritsu_stated"])
+        self.assertEqual(1, result["machine_state"]["fallback_check_count"])
+
+    def test_negative_stated_fact_does_not_use_the_fallback(self) -> None:
+        contract = self.write_contract(
+            "stated-negative",
+            check="""type = "stated_fact"
+fact = "packages.installed"
+path = "packages.*.name"
+operator = "contains"
+expected = "git"
+fallback = { type = "command_available", command = "git" }""",
+        )
+        self.apply(contract)
+        payload = {
+            "schema_version": "1.0",
+            "status": "ok",
+            "facts": {
+                "packages.installed": {
+                    "value": {"count": 0, "packages": []},
+                    "source": {"id": "packages"},
+                    "observed_at": "2026-08-24T12:00:00Z",
+                    "age_seconds": 0.1,
+                    "fixture": True,
+                }
+            },
+            "errors": [],
+        }
+        completed = subprocess.CompletedProcess([], 0, json.dumps(payload), "")
+
+        with patch("jiritsu_workload.state._invoke", return_value=completed):
+            status, result = self.invoke(
+                "assess", "stated-negative", "--stated-command", "/fake/jiritsu-stated"
+            )
+
+        self.assertEqual(EXIT_UNHEALTHY, status)
+        self.assertEqual(0, result["machine_state"]["fallback_check_count"])
+        check = result["workloads"][0]["capabilities"][0]["checks"][0]
+        self.assertEqual("fail", check["status"])
+        self.assertEqual("jiritsu-stated", check["source"])
+
+    def test_direct_state_source_bypasses_stated(self) -> None:
+        contract = self.write_contract(
+            "forced-direct",
+            check="""type = "stated_fact"
+fact = "system.omarchy.version"
+operator = "nonempty"
+fallback = { type = "command_available", command = "python3" }""",
+        )
+        self.apply(contract)
+
+        with patch("jiritsu_workload.state._invoke") as invoke:
+            status, result = self.invoke(
+                "assess", "forced-direct", "--state-source", "direct"
+            )
+
+        self.assertEqual(EXIT_OK, status)
+        invoke.assert_not_called()
+        self.assertEqual("disabled", result["machine_state"]["jiritsu_stated"])
+        self.assertEqual(1, result["machine_state"]["fallback_check_count"])
 
     def test_critical_failure_is_unhealthy(self) -> None:
         contract = self.write_contract(
@@ -174,6 +396,42 @@ class CliTests(unittest.TestCase):
         self.assertEqual("error", result["status"])
         self.assertEqual("contract_invalid", result["errors"][0]["code"])
         self.assertEqual("surprise", result["errors"][0]["field"])
+
+    def test_stated_contains_operator_requires_an_expected_value(self) -> None:
+        contract = self.write_contract(
+            "invalid-stated-test",
+            check='''type = "stated_fact"
+fact = "packages.installed"
+path = "packages.*.name"
+operator = "contains"''',
+        )
+
+        status, result = self.invoke("validate", str(contract))
+
+        self.assertEqual(EXIT_CONFIG, status)
+        self.assertEqual("contract_invalid", result["errors"][0]["code"])
+        self.assertEqual("expected", result["errors"][0]["field"])
+
+    def test_unavailable_fact_without_fallback_is_an_error(self) -> None:
+        contract = self.write_contract(
+            "stated-no-fallback",
+            check='''type = "stated_fact"
+fact = "system.omarchy.version"
+operator = "nonempty"''',
+        )
+        self.apply(contract)
+
+        status, result = self.invoke(
+            "assess",
+            "stated-no-fallback",
+            "--stated-command",
+            "/path/that/does/not/exist/jiritsu-stated",
+        )
+
+        self.assertEqual(EXIT_UNHEALTHY, status)
+        check = result["workloads"][0]["capabilities"][0]["checks"][0]
+        self.assertEqual("error", check["status"])
+        self.assertIn("no direct fallback", check["message"])
 
     def test_apply_creates_then_updates_a_user_contract(self) -> None:
         contract = self.write_contract(

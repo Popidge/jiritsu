@@ -21,44 +21,47 @@ timeout_seconds = 5
 [[capabilities]]
 id = "version-control"
 title = "Version control"
-description = "Git is installed and responds."
+description = "The native Git package is installed."
 importance = "critical"
 
 [[capabilities.checks]]
 id = "git-version"
-type = "command"
-description = "Read the installed Git version."
-command = ["git", "--version"]
-expected_exit = 0
-stdout = "nonempty"
-timeout_seconds = 5
+type = "stated_fact"
+description = "Find the installed Git package."
+fact = "packages.installed"
+path = "packages.*.name"
+operator = "contains"
+expected = "git"
+fallback = { type = "command", command = ["git", "--version"], expected_exit = 0, stdout = "nonempty", timeout_seconds = 5 }
 
 [[capabilities]]
 id = "source-search"
 title = "Source search"
-description = "Ripgrep is available for fast source and file searches."
+description = "The native ripgrep package is installed."
 importance = "useful"
 
 [[capabilities.checks]]
 id = "ripgrep-version"
-type = "command"
-description = "Read the installed ripgrep version."
-command = ["rg", "--version"]
-expected_exit = 0
-stdout = "nonempty"
-timeout_seconds = 5
+type = "stated_fact"
+description = "Find the installed ripgrep package."
+fact = "packages.installed"
+path = "packages.*.name"
+operator = "contains"
+expected = "ripgrep"
+fallback = { type = "command", command = ["rg", "--version"], expected_exit = 0, stdout = "nonempty", timeout_seconds = 5 }
 
 [[capabilities]]
 id = "python-runtime"
 title = "Python runtime"
-description = "Python 3 is available for local tools and automation."
+description = "The native Python package is installed."
 importance = "useful"
 
 [[capabilities.checks]]
 id = "python-version"
-type = "command"
-description = "Read the installed Python 3 version."
-command = ["python3", "--version"]
-expected_exit = 0
-stdout = "nonempty"
-timeout_seconds = 5
+type = "stated_fact"
+description = "Find the installed Python package."
+fact = "packages.installed"
+path = "packages.*.name"
+operator = "contains"
+expected = "python"
+fallback = { type = "command", command = ["python3", "--version"], expected_exit = 0, stdout = "nonempty", timeout_seconds = 5 }

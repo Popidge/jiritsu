@@ -1,0 +1,51 @@
+schema_version = "1.0"
+default = "deny"
+
+[[rules]]
+id = "read-machine-state"
+principals = ["*"]
+operations = ["state.query"]
+decision = "allow"
+authorities = ["machine_state.read"]
+
+[[rules]]
+id = "assess-workloads"
+principals = ["*"]
+operations = ["workload.assess"]
+decision = "allow"
+authorities = ["workload.assessment.read"]
+
+[[rules]]
+id = "record-and-read-proposals"
+principals = ["*"]
+operations = ["proposal.create", "proposal.query", "proposal.list"]
+decision = "allow"
+authorities = ["proposal.intent.write", "proposal.read"]
+
+[[rules]]
+id = "classify-proposals"
+principals = ["*"]
+operations = ["proposal.classify"]
+decision = "allow"
+authorities = ["proposal.classification.write", "machine_state.read", "workload.assessment.read"]
+
+[[rules]]
+id = "approve-classified-proposals"
+principals = ["*"]
+operations = ["proposal.approve"]
+decision = "require_approval"
+authorities = ["proposal.approval.write"]
+
+[[rules]]
+id = "promote-approved-proposals"
+principals = ["*"]
+operations = ["proposal.promote"]
+decision = "require_approval"
+authorities = ["user_config.write"]
+
+[[rules]]
+id = "read-checkpoints"
+principals = ["*"]
+operations = ["checkpoint.inspect", "checkpoint.query", "checkpoint.list"]
+decision = "allow"
+authorities = ["checkpoint.read"]

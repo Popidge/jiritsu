@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "intent": {
+    "summary": "Create the live integration smoke configuration.",
+    "rationale": "The smoke test exercises the complete proposal lifecycle."
+  },
+  "origin": {
+    "kind": "agent",
+    "actor": "jiritsu-proposals-test",
+    "request_id": "live-smoke"
+  },
+  "actions": [
+    {
+      "type": "config.mkdir",
+      "path": "jiritsu-smoke",
+      "mode": "0700"
+    },
+    {
+      "type": "config.write",
+      "path": "jiritsu-smoke/result.conf",
+      "content": "status=ready\n",
+      "mode": "0600"
+    }
+  ]
+}

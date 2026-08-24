@@ -12,11 +12,12 @@ The first version provides these functions:
 
 - Load readable TOML workload contracts.
 - Separate critical capabilities from useful capabilities.
-- Run small direct probes for each capability.
+- Read machine facts from `jiritsu-stated` by default.
+- Use direct probes when a stated fact is unavailable.
 - Return stable JSON for people, agents, and scripts.
 - Create or update user contracts with one atomic operation.
 
-This version does not use `jiritsu-stated`. Each assessment identifies `direct_probes` as its machine-state source.
+The command result schema has version `1.1`. Each check identifies `jiritsu-stated` or `direct_probe` as its source.
 
 ## Default contracts
 
@@ -27,11 +28,38 @@ The package contains two default contracts:
 | `omarchy-desktop` | Omarchy base, graphical session | Desktop audio, desktop notifications |
 | `agent-development` | Agent runtime, version control | Source search, Python runtime |
 
+The defaults contain five stated-backed checks and three session-local direct checks. Each stated-backed default has a direct fallback.
+
 User contracts take precedence over default contracts. A user contract overrides a default when both contracts have the same ID.
 
 The standard user directory is `$XDG_CONFIG_HOME/jiritsu/workloads.d`. The fallback is `~/.config/jiritsu/workloads.d`.
 
 Set `JIRITSU_WORKLOAD_CONFIG_DIR` to select a different directory. You can also use `--config-dir` for one command.
+
+## Machine-state source
+
+The `assess` command requests all required facts in one `jiritsu-stated query`. Duplicate fact requests occur only once in this query.
+
+The module finds the stated executable in this order:
+
+1. The `--stated-command` option.
+2. The `JIRITSU_STATED_COMMAND` environment variable.
+3. The `jiritsu-stated` command in `PATH`.
+4. The sibling development command in this repository.
+
+If the executable is unavailable, each `stated_fact` check runs its direct fallback. A failed or invalid stated query has the same behavior.
+
+If a partial query omits one fact, only checks for that fact use their fallbacks. Checks for returned facts still use stated.
+
+A stated fact that does not meet a requirement produces a normal failed check. The module does not replace a valid negative result with a fallback.
+
+Use direct probes for one assessment to diagnose stated behavior:
+
+```bash
+./bin/jiritsu-workload assess --state-source direct --pretty
+```
+
+If a contract has no `stated_fact` checks, the module does not start `jiritsu-stated`.
 
 ## Run an assessment
 
@@ -96,9 +124,13 @@ importance = "critical"
 
 [[capabilities.checks]]
 id = "restic-command"
-type = "command_available"
-description = "Find the Restic command."
-command = "restic"
+type = "stated_fact"
+description = "Find the installed Restic package."
+fact = "packages.installed"
+path = "packages.*.name"
+operator = "contains"
+expected = "restic"
+fallback = { type = "command_available", command = "restic" }
 
 [[capabilities]]
 id = "backup-target"
@@ -154,19 +186,50 @@ Unknown fields cause a validation error.
 
 ## Check types
 
-The first version supports five direct check types:
+The first version supports one stated check type and five direct check types:
 
 | Type | Required fields | Optional fields | Pass condition |
 | --- | --- | --- | --- |
+| `stated_fact` | `fact` | `path`, `operator`, `expected`, `fallback` | The selected fact value meets the requirement. |
 | `command_available` | `command` | None | The executable occurs in `PATH`. |
 | `command` | `command` array | `expected_exit`, `stdout`, `timeout_seconds` | The exit status and output meet the requirements. |
 | `environment` | `name` | `nonempty`, `equals` | The variable meets the presence or value requirement. |
 | `path` | `path` | `kind` | The expanded path has the required kind. |
 | `systemd_unit` | `unit` | `scope`, `state` | The unit has the required systemd state. |
 
+### Stated fact checks
+
+The `fact` field contains an exact fact ID from the `jiritsu-stated` catalog.
+
+The optional `path` selects fields inside the fact value. Use a dot between fields and `*` for each item in an array.
+
+For example, `packages.*.name` selects all package names from `packages.installed`.
+
+The default operator is `exists`. The supported operators are:
+
+| Operator | Requirement |
+| --- | --- |
+| `exists` | The fact and selected path exist. |
+| `nonempty` | The selected value is not empty. |
+| `equals` | The selected value equals `expected`. |
+| `not_equals` | The selected value does not equal `expected`. |
+| `contains` | The selected string, array, or object contains `expected`. |
+| `at_least` | The selected number is not less than `expected`. |
+| `at_most` | The selected number is not more than `expected`. |
+
+The `expected` field is required for all operators except `exists` and `nonempty`.
+
+The optional `fallback` table contains one direct check type and its fields. It must not contain another `stated_fact` check.
+
+If no fallback exists, an unavailable fact produces a check error.
+
+### Direct checks
+
 The default `expected_exit` is `0`. The `stdout` value is `any`, `nonempty`, or `empty`.
 
 The default command timeout is five seconds. The `assess --timeout` option changes it for checks without a local timeout.
+
+The same option sets the timeout for each source inside the stated query.
 
 The path `kind` value is `any`, `file`, `directory`, or `executable`. A path check expands a leading `~`.
 
@@ -194,22 +257,38 @@ A workload has one of these results:
 
 An assessment of multiple workloads uses the least healthy workload result.
 
+The `machine_state.source` value is `jiritsu-stated`, `direct_probes`, or `hybrid`. A hybrid assessment uses both sources.
+
+The `machine_state` object also counts stated checks, direct probes, and fallbacks. Its stated details contain the query status and requested facts.
+
 ## Read the JSON result
 
 Every assessment returns one JSON object. This example omits check details:
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "status": "healthy",
   "assessed_at": "2026-08-24T12:00:05Z",
   "machine_state": {
-    "source": "direct_probes",
-    "jiritsu_stated": "not_used"
+    "source": "hybrid",
+    "jiritsu_stated": "used",
+    "stated": {
+      "status": "used",
+      "requested_facts": [
+        "packages.installed",
+        "system.omarchy.version"
+      ],
+      "fact_count": 2,
+      "query_status": "ok"
+    },
+    "stated_check_count": 5,
+    "direct_probe_count": 3,
+    "fallback_check_count": 0
   },
   "summary": {
-    "workload_count": 1,
-    "healthy": 1,
+    "workload_count": 2,
+    "healthy": 2,
     "degraded": 0,
     "unhealthy": 0
   },
@@ -218,7 +297,7 @@ Every assessment returns one JSON object. This example omits check details:
 }
 ```
 
-Each workload contains its resolved contract source. Each capability contains all check results, messages, durations, and bounded details.
+Each workload contains its resolved contract source. Each capability contains all check results, sources, messages, durations, and bounded details.
 
 ## Exit status
 
@@ -232,7 +311,7 @@ Each workload contains its resolved contract source. Each capability contains al
 
 ## Safety and boundaries
 
-All packaged checks are read-only. The module does not use `sudo`, start services, or repair failed capabilities.
+All packaged checks and stated queries are read-only. The module does not use `sudo`, start services, or repair failed capabilities.
 
 The `command` check starts its argument array directly. It does not use shell interpretation.
 
@@ -240,9 +319,9 @@ A custom command still runs with the current user permissions. Apply contracts o
 
 Do not put secrets in command output. The result can contain the first 500 characters of standard output and standard error.
 
-The first version has no `jiritsu-stated` import, command call, or package dependency. Direct probes keep this module useful by itself.
+The package has no required Python dependency on `jiritsu-stated`. The command boundary keeps both modules useful by themselves.
 
-Later work can add `jiritsu-stated` as the first-class machine-state source. That integration must preserve the workload and result meanings.
+The direct fallbacks preserve standalone assessment when `jiritsu-stated` is not installed.
 
 ## Development
 
@@ -252,7 +331,9 @@ Run the focused test suite:
 python -m unittest discover -s tests -v
 ```
 
-The tests cover loading, selection, overrides, validation, user writes, result severity, and direct assessment without `jiritsu-stated`.
+The tests cover stated success, partial results, invalid responses, missing executables, direct fallbacks, and valid negative facts.
+
+They also cover loading, selection, overrides, validation, user writes, result severity, and direct-only contracts.
 
 ## Place in Jiritsu
 
@@ -260,4 +341,4 @@ The tests cover loading, selection, overrides, validation, user writes, result s
 
 `jiritsu-proposals` can use workload results during risk assessment and verification. A proposal that breaks a critical workload does not succeed.
 
-`jiritsu-broker` can expose workload health to agents. A person can also assess a workload without agent involvement.
+`jiritsu-broker` exposes workload health to agents. A person can also assess a workload without agent involvement.
