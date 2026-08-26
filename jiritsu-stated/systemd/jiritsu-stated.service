@@ -1,0 +1,45 @@
+[Unit]
+Description=Jiritsu machine state daemon
+Documentation=file:/usr/local/share/doc/jiritsu-stated/README.md
+After=dbus.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/libexec/jiritsu-stated serve --socket /run/jiritsu/stated.sock --socket-mode 0660
+DynamicUser=yes
+Group=jiritsu
+RuntimeDirectory=jiritsu
+RuntimeDirectoryMode=0750
+Restart=on-failure
+RestartSec=2s
+TimeoutStopSec=10s
+UMask=0077
+
+# The daemon serves a local Unix socket. Its Omarchy network probe uses IPv4.
+CapabilityBoundingSet=
+DevicePolicy=closed
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+NoNewPrivileges=yes
+PrivateDevices=yes
+PrivateTmp=yes
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectHome=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectProc=invisible
+ProtectSystem=strict
+RemoveIPC=yes
+RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+SystemCallArchitectures=native
+SystemCallErrorNumber=EPERM
+SystemCallFilter=@system-service
+
+[Install]
+WantedBy=multi-user.target
