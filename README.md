@@ -42,7 +42,7 @@ Each module also provides value before the complete path exists.
 
 | Module | Status | Purpose |
 | --- | --- | --- |
-| [`jiritsu-stated`](jiritsu-stated/) | First version | Reports stable, source-aware facts about the current machine. |
+| [`jiritsu-stated`](jiritsu-stated/) | Rust daemon | Caches stable, source-aware facts and provides direct fallback. |
 | [`jiritsu-workload`](jiritsu-workload/) | First version | Defines local workload contracts and assesses important capabilities. |
 | [`jiritsu-proposals`](jiritsu-proposals/) | First version | Records intended changes, risk, approval, verification, and history. |
 | [`jiritsu-checkpoints`](jiritsu-checkpoints/) | First version | Creates recovery points that relate to machine changes. |
@@ -53,9 +53,9 @@ Every module has its own README. That README describes the current contract, bou
 
 ## What Works Today
 
-`jiritsu-stated` reports system, package, service, hardware, network, and snapshot facts. It returns stable JSON with source and observation details.
+`jiritsu-stated` runs as an event-driven Rust daemon. Its Unix socket provides cached system, package, service, hardware, network, and snapshot facts.
 
-The module also replays captured source data through its production parsers. This process gives its important collection paths deterministic tests.
+The CLI collects facts directly when the daemon is unavailable. Rust and Python also replay the same fixtures through their production parsers.
 
 `jiritsu-workload` loads readable TOML contracts and assesses their capabilities. Its direct probes cover commands, environment variables, paths, and systemd units.
 
@@ -91,9 +91,10 @@ The skill set also passed a fresh-context agent trial. The agent used the instal
 
 ## Try the Implemented Modules
 
-Python 3.11 or newer is required. Run these development commands from the repository root:
+Rust 1.85 and Python 3.11 or newer are required. Run these development commands from the repository root:
 
 ```bash
+cargo build --manifest-path jiritsu-stated/Cargo.toml
 ./jiritsu-stated/bin/jiritsu-stated query system hardware --pretty
 ./jiritsu-workload/bin/jiritsu-workload assess --pretty
 ./jiritsu-proposals/bin/jiritsu-proposals paths --pretty

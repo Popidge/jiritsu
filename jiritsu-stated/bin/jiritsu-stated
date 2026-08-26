@@ -2,4 +2,10 @@
 set -euo pipefail
 
 module_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-exec env PYTHONPATH="${module_root}/src${PYTHONPATH:+:${PYTHONPATH}}" python3 -m jiritsu_stated "$@"
+rust_command="${module_root}/target/debug/jiritsu-stated"
+
+if [[ "${JIRITSU_STATED_IMPLEMENTATION:-auto}" != "python" && -x "$rust_command" ]]; then
+  exec "$rust_command" "$@"
+fi
+
+exec "${module_root}/bin/jiritsu-stated-python" "$@"
