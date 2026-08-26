@@ -5,16 +5,17 @@ After=dbus.service
 
 [Service]
 Type=simple
-ExecStart=/usr/local/libexec/jiritsu-stated serve --socket /run/jiritsu/stated.sock --socket-mode 0666
+ExecStart=/usr/local/libexec/jiritsu-stated serve --socket /run/jiritsu/stated.sock --socket-mode 0660
 DynamicUser=yes
+Group=jiritsu
 RuntimeDirectory=jiritsu
-RuntimeDirectoryMode=0755
+RuntimeDirectoryMode=0750
 Restart=on-failure
 RestartSec=2s
 TimeoutStopSec=10s
 UMask=0077
 
-# The daemon only reads local state and serves a local Unix socket.
+# The daemon serves a local Unix socket. Its Omarchy network probe uses IPv4.
 CapabilityBoundingSet=
 DevicePolicy=closed
 LockPersonality=yes
@@ -32,7 +33,7 @@ ProtectKernelTunables=yes
 ProtectProc=invisible
 ProtectSystem=strict
 RemoveIPC=yes
-RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET AF_INET6
+RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET
 RestrictNamespaces=yes
 RestrictRealtime=yes
 RestrictSUIDSGID=yes

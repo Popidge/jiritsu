@@ -144,11 +144,13 @@ fn daemon_serves_cached_facts_and_reloads_fixture_events() {
     }
 
     payload["sources"]["system.hostname"]["content"] = Value::String("event-host\n".to_owned());
+    let replacement = fixture.with_extension("replacement");
     fs::write(
-        &fixture,
+        &replacement,
         serde_json::to_vec_pretty(&payload).expect("encode fixture"),
     )
     .expect("write fixture");
+    fs::rename(&replacement, &fixture).expect("replace fixture");
 
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {

@@ -395,11 +395,7 @@ fn watch_paths(provider: &ProviderConfig) -> Vec<(PathBuf, RecursiveMode)> {
             RecursiveMode::NonRecursive,
         )],
         ProviderConfig::Live => vec![
-            (PathBuf::from("/etc/hostname"), RecursiveMode::NonRecursive),
-            (
-                PathBuf::from("/etc/os-release"),
-                RecursiveMode::NonRecursive,
-            ),
+            (PathBuf::from("/etc"), RecursiveMode::NonRecursive),
             (
                 PathBuf::from("/var/lib/pacman/local"),
                 RecursiveMode::Recursive,
@@ -539,4 +535,23 @@ async fn shutdown_signal() -> Result<(), CollectionError> {
 
 fn log_message(message: &str) {
     eprintln!("jiritsu-stated: {message}");
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use notify::RecursiveMode;
+
+    use super::watch_paths;
+    use crate::model::ProviderConfig;
+
+    #[test]
+    fn live_file_watch_survives_atomic_etc_replacements() {
+        let paths = watch_paths(&ProviderConfig::Live);
+
+        assert!(paths.contains(&(PathBuf::from("/etc"), RecursiveMode::NonRecursive)));
+        assert!(!paths.iter().any(|(path, _)| path == "/etc/hostname"));
+        assert!(!paths.iter().any(|(path, _)| path == "/etc/os-release"));
+    }
 }

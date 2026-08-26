@@ -1,3 +1,4 @@
+use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Output};
 
@@ -122,4 +123,28 @@ fn required_missing_daemon_returns_a_structured_error() {
     assert_eq!(response["status"], "error");
     assert_eq!(response["runtime"]["selected_provider"], "none");
     assert_eq!(response["errors"][0]["code"], "daemon_unavailable");
+}
+
+#[test]
+fn deployment_uses_the_jiritsu_group_and_prefers_release_builds() {
+    let root = module_root();
+    let service =
+        fs::read_to_string(root.join("systemd/jiritsu-stated.service")).expect("service unit");
+    assert!(service.contains("--socket-mode 0660"));
+    assert!(service.contains("Group=jiritsu"));
+    assert!(service.contains("RuntimeDirectoryMode=0750"));
+    assert!(service.contains("RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET\n"));
+    assert!(!service.contains("AF_INET6"));
+
+    let sysusers =
+        fs::read_to_string(root.join("sysusers.d/jiritsu-stated.conf")).expect("sysusers file");
+    assert_eq!(sysusers.trim(), "g jiritsu -");
+
+    let launcher =
+        fs::read_to_string(root.join("bin/jiritsu-stated")).expect("source-tree launcher");
+    let release = launcher
+        .find("target/release/jiritsu-stated")
+        .expect("release");
+    let debug = launcher.find("target/debug/jiritsu-stated").expect("debug");
+    assert!(release < debug);
 }

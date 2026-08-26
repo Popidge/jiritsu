@@ -60,7 +60,7 @@ Build the development command from this module directory:
 cargo build
 ```
 
-The source-tree wrapper selects `target/debug/jiritsu-stated` after this build:
+The source-tree wrapper selects the release command first. It selects the development command when no release command exists.
 
 ```bash
 ./bin/jiritsu-stated query system hardware --pretty
@@ -130,8 +130,7 @@ Filesystem events refresh these sources:
 
 | Watched path | Facts |
 | --- | --- |
-| `/etc/hostname` | `system.hostname` |
-| `/etc/os-release` | `system.os` |
+| `/etc` | `system.hostname` and `system.os` |
 | `/var/lib/pacman/local` | `packages.installed` |
 | `/etc/snapper/configs` | `snapshots.configurations` |
 
@@ -191,16 +190,27 @@ Build the release command:
 cargo build --release
 ```
 
-Install the command, service, and documentation:
+Install the command, service, group definition, and documentation:
 
 ```bash
 sudo install -Dm0755 target/release/jiritsu-stated \
   /usr/local/libexec/jiritsu-stated
 sudo install -Dm0644 systemd/jiritsu-stated.service \
   /etc/systemd/system/jiritsu-stated.service
+sudo install -Dm0644 sysusers.d/jiritsu-stated.conf \
+  /usr/local/lib/sysusers.d/jiritsu-stated.conf
 sudo install -Dm0644 README.md \
   /usr/local/share/doc/jiritsu-stated/README.md
+sudo systemd-sysusers /usr/local/lib/sysusers.d/jiritsu-stated.conf
 ```
+
+Add each authorized account to group `jiritsu`:
+
+```bash
+sudo usermod --append --groups jiritsu "$USER"
+```
+
+Sign in again to activate the new group membership.
 
 Reload systemd and start the service:
 
@@ -222,11 +232,11 @@ Then query the default socket:
 ./target/release/jiritsu-stated query --require-daemon --pretty
 ```
 
-CAUTION: Do not install this unit on an untrusted multi-user machine. Its mode `0666` socket exposes reported state to every local user.
+Root and members of group `jiritsu` can access the service socket.
 
-The service uses a dynamic non-root user. It has no capabilities and has read-only access to the operating-system hierarchy.
+The service uses a dynamic non-root user and a stable group named `jiritsu`. It has no capabilities and has read-only operating-system access.
 
-The service also restricts devices, namespaces, process visibility, address families, and system calls.
+The service also restricts devices, namespaces, process visibility, address families, and system calls. The Omarchy network probe requires IPv4 socket access.
 
 ## Python reference
 
